@@ -7,8 +7,8 @@ from connect import Telnet
 from data import logger
 import window
 
-conf.telnet = None
-conf.telnet_join = False
+conf.telnet = None  # 保存Telnet类
+conf.telnet_join = False  # 保存是否有Telnet会话进入
 
 
 def telnet():
@@ -33,33 +33,55 @@ def exit():
 
     if k == 0:
         curses.endwin()
+
+        logging.shutdown()
+
         conf.process_running = False
         sys.exit()
-    else:
-        box.quit()
 
 
-conf.capture = None
+conf.capture = None  # 保存拷屏Logger
 
 
 def capture():
     box = window.DialogBox()
     box.control_label('Set capture file')
     box.control_input('capturefile')
-    box.control_button(['OK', 'Cancel'])
-    k = box.display()
+    box.display()
 
-    if k == 0:
+    if not conf.capture:
         conf.capture = logging.getLogger('CaptureLog')
-        log_format = logging.Formatter('%(message)s')
-        handle = logging.FileHandler(box.inputs['capturefile'].strip())
+
+    else:
+        for h in conf.capture.handlers[:]:
+            conf.capture.removeHandler(h)
+
+    log_format = logging.Formatter('%(message)s')
+
+    filename = box.inputs['capturefile'].strip()
+
+    if filename:
+        handle = logging.FileHandler(filename)
         handle.setFormatter(log_format)
         conf.capture.addHandler(handle)
         conf.capture.setLevel(logging.INFO)
 
-    else:
-        if conf.capture:
-            conf.capture.close()
-            conf.capture = None
 
-    box.quit()
+def close_capture():
+    """关闭Capture如果有的话"""
+    if has_capture():
+        for h in conf.capture.handlers[:]:
+            conf.capture.removeHandler(h)
+
+
+def has_capture():
+    """判断是否有记录文件"""
+
+    if conf.capture:
+        return len(conf.capture.handlers) > 0
+
+    return False
+
+
+def send_break():
+    conf.port.send_break()

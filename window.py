@@ -1,7 +1,9 @@
-from curses.textpad import Textbox, rectangle
 import curses
+from curses.textpad import Textbox, rectangle
 import threading
 import math
+import logging
+import time
 
 from data import logger
 from data import conf
@@ -12,7 +14,9 @@ from observe import Observer
 from connect import Telnet
 import features
 
-conf.process_running = True
+conf.process_running = True  # 控制进程
+conf.window = None  # 保存主屏幕
+conf.port = None  # 保存串口
 
 
 class Screen(object):
@@ -46,7 +50,7 @@ class Screen(object):
 
         curses.noecho()
         curses.cbreak()
-        curses.mousemask(-1)
+        curses.mousemask(True)
         curses.start_color()
 
         self._menu = MenuEx(self._window)
@@ -64,7 +68,21 @@ class Screen(object):
                 logger.info("Screen.keyboard_input: Menu.run()")
                 self._menu.run()
                 self._window.refresh()
+
+            elif ch == KEYBOARD.Up:
+                self.port.write_hex('1b5b41')
+
+            elif ch == KEYBOARD.Down:
+                self.port.write_hex('1b5b42')
+
+            elif ch == KEYBOARD.Right:
+                self.port.write_hex('1b5b43')
+
+            elif ch == KEYBOARD.Left:
+                self.port.write_hex('1b5b44')
+
             else:
+                logger.debug('keyboard input %s' % ch)
                 self.port.write(ch)
 
     def display_buffer(self):
@@ -75,16 +93,21 @@ class Screen(object):
         while conf.process_running:
             y, x = self._window.getmaxyx()
 
+
             stream = self._observer.get(timeout=1)
 
+            # FIXME 退出会有闪屏
+            while self._menu.has_enable() and conf.process_running:
+                time.sleep(0.1)
+
             self._statusbar.display_statusbar(y, x)
+            # FIXME 崩溃问题
             self._window.move(y-2, pos)
 
             for e in stream:
                 if e == "\n":
-                    # NOTE 加入capture
-                    # logger.debug('%s' % self._window.instr(y-2, 1).rstrip())
-                    if conf.capture:
+                    # NOTE 加入capture，要注意这里是对屏幕的记录
+                    if features.has_capture():
                         conf.capture.info(self._window.instr(
                             y-2, 1).rstrip().decode())
                     self._window.scroll()
@@ -102,7 +125,6 @@ class Screen(object):
 
                 else:  # 实际内容
                     if pos >= x:
-                        self._window.scroll()
                         pos = 1
                     self._window.addstr(y-2, pos, e)
                     pos += 1
@@ -132,7 +154,7 @@ class Screen(object):
             try:
                 t.join()
             except KeyboardInterrupt:
-                pass
+                self.port.write(3)
 
         curses.endwin()
 
@@ -159,16 +181,19 @@ class MenuEx:
         self._window = window
         self._menu = None
         self._options = {}
+        self._enable = False
 
         self.max_long = 60
 
-        self.add_item('t', 'connection Telnet turn on/off',
-                      features.telnet, True)
-        self.add_item('q', 'Quit Process', features.exit)
-        self.add_item('c', 'Capture file', features.capture)
+        self.add_item('t', 'connection Telnet turn on/off', features.telnet)
+        self.add_item('l', 'Capture file', features.capture)
+        self.add_item('c', 'Close capture if open', features.close_capture)
+        # self.add_item('b', 'send Break', features.send_break) # 没有此接口
 
-    def add_item(self, sortkey, description, dirct_func, quit_menu=False):
-        """添加选项"""
+        self.add_item('q', 'Quit Process', features.exit)
+
+    def add_item(self, sortkey, description, dirct_func, quit_menu=True):
+        """添加选项, 并且确定运行后是否退出菜单"""
         self._options[sortkey.upper()] = {
             'description': description, 'dirct_func': dirct_func, 'quit_menu': quit_menu}
 
@@ -189,6 +214,7 @@ class MenuEx:
         y, x = yxcenter(self._window)
 
         self._menu = curses.newwin(
+        # self._menu = self._window.subwin(  # FIXME 这里会偶尔出现问题
             len(buf)+2, self.max_long, y-math.ceil(len(buf)/2), x-math.ceil(self.max_long/2))
 
         index = 1
@@ -197,13 +223,14 @@ class MenuEx:
             index += 1
 
         self._menu.border('|', '|', '-', '-', '+', '+', '+', '+')
-        # self._menu.box()
         self._menu.refresh()
 
     def run(self):
+        curses.curs_set(0)
         self.display_menu()
 
         while True:
+            self._enable = True
             k = self.getch()
             if (k == KEYBOARD.Esc):
                 self.quit()
@@ -219,9 +246,15 @@ class MenuEx:
                     self.quit()
                     break
 
+        curses.curs_set(1)
+        self._enable = False
+
     def quit(self):
         self._menu.clear()
         self._menu.refresh()
+
+    def has_enable(self):
+        return self._enable
 
 
 class StatusBar:
@@ -243,7 +276,7 @@ class StatusBar:
             else:
                 msg.append('Telnet Status: Listen')
 
-        if conf.capture:
+        if features.has_capture():
             msg.append('Capture Logging enable')
 
         msg = " | ".join(msg)
@@ -298,9 +331,11 @@ class DialogBox:
         height = len(self.controls) + 2
 
         ny, nx = yxcenter(conf.window)
-        self._box = curses.newwin(height, self.length,
-                                  ny-math.ceil(height/2),
-                                  nx-math.ceil(self.length/2))
+        self._box = curses.newwin(
+            # self._box = conf.window.subwin(
+            height, self.length,
+            ny-math.ceil(height/2),
+            nx-math.ceil(self.length/2))
         index = 1
         for i in self.controls:
             i.box = self._box
@@ -322,6 +357,7 @@ class DialogBox:
                 select = i.getch()
 
         # 需要找self.input拿东西
+        self.quit()
         return select
 
     def quit(self):
@@ -445,6 +481,7 @@ class ControlInput(Control):
         return s
 
     def getch(self):
+        curses.curs_set(1)
         # 关于子窗口使用 derwin 还是 subwin
         # https://stackoverflow.com/questions/11234785/obscure-curses-error-message-when-creating-a-sub-window
         input_box = self.box.derwin(
@@ -453,6 +490,7 @@ class ControlInput(Control):
         input_textbox = Textbox(input_box)
         input_textbox.edit()
         logger.debug('cotrol input -> %s' % input_textbox.gather())
+        curses.curs_set(0)
         return input_textbox.gather()
 
     def __len__(self):

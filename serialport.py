@@ -44,6 +44,9 @@ class SerialPort(object):
         for s in stream:
             self.write(s)
 
+    def write_hex(self, h):
+        self.port.write(bytes.fromhex(h))
+
     def thread_loop_read(self):
         return threading.Thread(target=self.loop_read, name='serialport_thread')
 
