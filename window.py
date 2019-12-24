@@ -1,34 +1,96 @@
 import curses
+import threading
+import time
+import queue as Queue
 
-from data import window
-from data import port
-from data import kb
+from data import logger
+from data import queue
 
-def init_crt():
-    crt = curses.initscr()
-    crt.clear()
-    crt.refresh()
 
-    window.crt = crt
+class Screen(object):
+    """https://docs.python.org/3/howto/curses.html"""
 
-    curses.start_color()
-    curses.mousemask(-1)
+    def __init__(self, port):
 
-def read_buffer():
-    k = 0
+        self.y = 0
+        self.x = 0
 
-    while (k != 17): # Ctrl + Q
-        window.crt.clear()
-        height, width = window.crt.getmaxyx()
+        self.top = 0
 
-        if k == curses.KEY_MOUSE: # 如果是鼠标的移动，这不动
+        self.window = None
+        self.init_curses()
+
+        self.port = port
+
+    def init_curses(self):
+
+        self.window = curses.initscr()
+        self.window.keypad(True)
+        self.window.scrollok(True)
+        self.window.clear()
+
+
+        curses.noecho()
+        curses.cbreak()
+        curses.mousemask(-1)
+        curses.start_color()
+
+        self.y, self.x = self.window.getmaxyx()
+
+    def keyboard_input(self):
+        """这里获取输入并写入serialport"""
+        logger.info("Screen.keyboard_input Run")
+        while True:
+            ch = self.window.getch()
+
+            if ch == curses.KEY_MOUSE:
+                pass
+            elif ch == 17:  # Ctrl + Q
+                logger.debug('Screen.keyboard_input >>Ctrl + Q<<')
+                exit()
+            else:
+                logger.debug('Screen.keyboard_input >>%s<<' % chr(ch))
+                self.port.write(ch)
+
+    def display_buffer(self):
+        pos = 1
+
+        logger.info("Screen.display_buffer Run")
+        while True:
+            try:
+                e = queue.get(timeout=0.1)
+                if e == "\n":
+                    self.window.scroll()
+                    pos = 1
+
+                else:
+                    logger.info("Screen.display_buffer get Char %s" % e)
+                    if (ord(e) == 263):  # 退格
+                        if pos > 2:
+                            pos -= 1
+                        self.window.addstr(self.y-1, pos, ' ')
+                    else:
+                        self.window.addstr(self.y-1, pos, e)
+                        pos += 1
+            except Queue.Empty:
+               time.sleep(0.1) 
+               pass
+
+    def thread_keyboard_input(self):
+        return threading.Thread(target=self.keyboard_input)
+
+    def thread_display_buffer(self):
+        return threading.Thread(target=self.display_buffer)
+
+    def run(self):
+        try:
+            threads = []
+            threads.append(self.thread_display_buffer())
+            threads.append(self.thread_keyboard_input())
+
+            for t in threads:
+                t.start()
+        except KeyboardInterrupt:
             pass
-
-        else:
-            port.write(k)
-
-        if port.has_new:
-            window.crt.addstr(0,0, kb.buffer)
-
-
-
+        finally:
+            curses.endwin()

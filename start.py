@@ -1,11 +1,18 @@
 import threading
 
-import serialport
-import window
+from serialport import SerialPort
+from window import Screen
+from debug import debug
 
-window.init_crt()
-serialport.init_serial()
+port = SerialPort('/dev/rfcomm0', 9600)
 
-threading.Thread(target=serialport.loop_read)
+screen = Screen(port)
+
+screen.init_curses()
+
+port.run()
+screen.run()
+
+
 
 
