@@ -65,7 +65,7 @@ class Screen(object):
                     pos = 1
 
                 else:
-                    logger.info("Screen.display_buffer get Char %s" % e)
+                    logger.debug("Screen.display_buffer get Char: %s" % e)
                     if (ord(e) == 263):  # 退格
                         if pos > 2:
                             pos -= 1
@@ -73,6 +73,8 @@ class Screen(object):
                     else:
                         self.window.addstr(self.y-1, pos, e)
                         pos += 1
+
+                self.window.refresh() # 需要重新刷新
             except Queue.Empty:
                time.sleep(0.1) 
                pass
@@ -86,11 +88,15 @@ class Screen(object):
     def run(self):
         try:
             threads = []
-            threads.append(self.thread_display_buffer())
-            threads.append(self.thread_keyboard_input())
-            threads.append(self.port.thread_loop_read())
+            th1 = self.thread_keyboard_input()
+            th2 = self.port.thread_loop_read()
+            th3 = self.thread_display_buffer()
+            threads.append(th1)
+            threads.append(th2)
+            threads.append(th3)
 
             for t in threads:
+                t.setDaemon(True)
                 t.start()
 
             for t in threads:
