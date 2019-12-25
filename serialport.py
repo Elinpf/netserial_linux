@@ -18,15 +18,16 @@ class SerialPort(object):
         self.port.flushInput()
         print(self.port.name)
 
-    def write(self, c:int):
+    def write(self, c: int):
         """对每个输入的字符进行写入"""
         if c == KEYBOARD.BackSpace:
             logger.debug("SerialPort.write <BackSpace>")
             self.port.write(b'\x08')
+        elif c == KEYBOARD.Enter:
+            self.port.write(b'\r')
         else:
             logger.debug("SerialPort.write Char int: %s" % c)
             self.port.write(chr(c).encode())
-
 
     def thread_loop_read(self):
         return threading.Thread(target=self.loop_read)
@@ -41,4 +42,3 @@ class SerialPort(object):
                     queue.put(c.decode())
             except Queue.Empty:
                 pass
-

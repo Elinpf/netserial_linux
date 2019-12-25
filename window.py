@@ -68,9 +68,8 @@ class Screen(object):
                     logger.debug("Screen.display_buffer get Char: %s" % e)
                     if (ord(e) == 8):  # 退格
                         logger.debug("Screen.display_buffer BackSpace: %s" % e)
-                        if pos > 2:
+                        if pos > 0:
                             pos -= 1
-                        # self.window.addstr(self.y-1, pos, ' ')
                         curses.killchar()
                         self.window.move(self.y-1, pos)
                         
