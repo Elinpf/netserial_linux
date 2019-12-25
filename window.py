@@ -51,6 +51,7 @@ class Screen(object):
             else:
                 logger.debug('Screen.keyboard_input >>%s<<' % chr(ch))
                 self.port.write(ch)
+                pass
 
     def display_buffer(self):
         pos = 1
@@ -87,9 +88,13 @@ class Screen(object):
             threads = []
             threads.append(self.thread_display_buffer())
             threads.append(self.thread_keyboard_input())
+            threads.append(self.port.thread_loop_read())
 
             for t in threads:
                 t.start()
+
+            for t in threads:
+                t.join()
         except KeyboardInterrupt:
             pass
         finally:

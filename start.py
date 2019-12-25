@@ -10,8 +10,8 @@ screen = Screen(port)
 
 screen.init_curses()
 
-port.run()
 screen.run()
+port.run()
 
 
 
