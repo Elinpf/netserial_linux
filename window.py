@@ -66,10 +66,13 @@ class Screen(object):
 
                 else:
                     logger.debug("Screen.display_buffer get Char: %s" % e)
-                    if (ord(e) == 263):  # 退格
+                    if (ord(e) == 7):  # 退格
+                        logger.debug("Screen.display_buffer BackSpace: %s" % e)
+                        curses.flash()
                         if pos > 2:
                             pos -= 1
                         self.window.addstr(self.y-1, pos, ' ')
+                        self.window.move(self.y-1, pos)
                     else:
                         self.window.addstr(self.y-1, pos, e)
                         pos += 1

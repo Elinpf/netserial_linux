@@ -5,6 +5,7 @@ import queue as Queue
 
 from data import queue
 from data import logger
+from enums import KEYBOARD
 
 
 class SerialPort(object):
@@ -17,15 +18,15 @@ class SerialPort(object):
         self.port.flushInput()
         print(self.port.name)
 
-    def write(self, c):
+    def write(self, c:int):
         """对每个输入的字符进行写入"""
-        if isinstance(c, int):
-            logger.debug("SerialPort.write Char: %s" % c)
+        if c == KEYBOARD.BackSpace:
+            logger.debug("SerialPort.write BackSpace")
+            self.port.write(b'\x07')
+        else:
+            logger.debug("SerialPort.write Char int: %s" % c)
             self.port.write(chr(c).encode())
 
-        elif isinstance(c, str):
-            logger.debug("SerialPort.write Char: %s" % c)
-            self.port.write(c.encode())
 
     def thread_loop_read(self):
         return threading.Thread(target=self.loop_read)
