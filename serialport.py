@@ -21,8 +21,8 @@ class SerialPort(object):
     def write(self, c:int):
         """对每个输入的字符进行写入"""
         if c == KEYBOARD.BackSpace:
-            logger.debug("SerialPort.write BackSpace")
-            self.port.write(b'\x07')
+            logger.debug("SerialPort.write <BackSpace>")
+            self.port.write(b'\x08')
         else:
             logger.debug("SerialPort.write Char int: %s" % c)
             self.port.write(chr(c).encode())
