@@ -5,6 +5,8 @@ import queue as Queue
 
 from data import logger
 from data import queue
+from data import conf
+from enums import KEYBOARD
 
 
 class Screen(object):
@@ -17,41 +19,45 @@ class Screen(object):
 
         self.top = 0
 
-        self.window = None
+        self._window = None
         self.init_curses()
 
         self.port = port
 
     def init_curses(self):
 
-        self.window = curses.initscr()
-        self.window.keypad(True)
-        self.window.scrollok(True)
-        self.window.clear()
-
+        self._window = curses.initscr()
+        self._window.keypad(True)
+        self._window.scrollok(True)
+        self._window.clear()
 
         curses.noecho()
         curses.cbreak()
         curses.mousemask(-1)
         curses.start_color()
 
-        self.y, self.x = self.window.getmaxyx()
+        self._menu = Menu(self._window)
+
+        self.y, self.x = self._window.getmaxyx()
 
     def keyboard_input(self):
         """这里获取输入并写入serialport"""
         logger.info("Screen.keyboard_input Run")
         while True:
-            ch = self.window.getch()
+            ch = self._window.getch()
 
             if ch == curses.KEY_MOUSE:
                 pass
             elif ch == 17:  # Ctrl + Q
                 logger.debug('Screen.keyboard_input >>Ctrl + Q<<')
                 exit()
+            elif ch == 1:  # Ctrl + A
+                logger.info("Screen.keyboard_input: Menu.run()")
+                self._menu.run()
+                self._window.refresh()
             else:
                 logger.debug('Screen.keyboard_input >>%s<<' % chr(ch))
                 self.port.write(ch)
-                pass
 
     def display_buffer(self):
         pos = 1
@@ -61,7 +67,7 @@ class Screen(object):
             try:
                 e = queue.get(timeout=0.1)
                 if e == "\n":
-                    self.window.scroll()
+                    self._window.scroll()
                     pos = 1
 
                 else:
@@ -71,19 +77,19 @@ class Screen(object):
                         if pos > 0:
                             pos -= 1
                         curses.killchar()
-                        self.window.move(self.y-1, pos)
-                        
-                    elif (ord(e) == 7): # 顶头
+                        self._window.move(self.y-1, pos)
+
+                    elif (ord(e) == 7):  # 顶头
                         logger.debug("Screen.display_buffer LEFT: %s" % ord(e))
                         curses.flash()
                     else:
-                        self.window.addstr(self.y-1, pos, e)
+                        self._window.addstr(self.y-1, pos, e)
                         pos += 1
 
-                self.window.refresh() # 需要重新刷新
+                self._window.refresh()  # 需要重新刷新
             except Queue.Empty:
-               time.sleep(0.1) 
-               pass
+                time.sleep(0.1)
+                pass
 
     def thread_keyboard_input(self):
         return threading.Thread(target=self.keyboard_input)
@@ -108,6 +114,63 @@ class Screen(object):
             for t in threads:
                 t.join()
         except KeyboardInterrupt:
-            pass
+            exit()
         finally:
             curses.endwin()
+
+
+def yxcenter(scr, text=""):
+    '''
+    Given a curses window and a string, return the x, y coordinates to pass to
+    scr.addstr() for the provided text to be drawn in the horizontal and
+    vertical center of the window.
+    '''
+    y, x = scr.getmaxyx()
+    nx = (x // 2) - (len(text) // 2)
+    ny = (y // 2) - (len(text.split('\n')) // 2)
+    return ny, nx
+
+
+class Menu(object):
+
+    def __init__(self, stdscr):
+        y, x = yxcenter(stdscr)
+
+        self._window = curses.newwin(10, 40, y-5, x-20)
+        self._window.border(1)
+
+    def menu_bar(self):
+        res = ['CollConsole Command Summary']
+        res.append('')
+
+        res.append('connect HTTP on/off....H')
+
+        conf.http = False
+
+        return res
+
+    def show_menu(self):
+        index = 1
+        for i in self.menu_bar():
+            self._window.addstr(index, 2, i)
+            index += 1
+
+        self._window.refresh()
+
+    def run(self):
+        self.show_menu()
+        while (True):
+            k = self.getch()
+            logger.debug("Menu.run: getch>>%s<<" % k)
+
+            if (k == ord('q') or k == KEYBOARD.Esc):
+                self._window.clear()
+                self._window.refresh()
+                break
+
+            if (chr(k).upper() == 'H'):
+                conf.http = not conf.http
+                logger.info("Connect %s HTTP" % conf.http)
+
+    def getch(self):
+        return self._window.getch()

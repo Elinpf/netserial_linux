@@ -11,7 +11,3 @@ screen = Screen(port)
 screen.init_curses()
 
 screen.run()
-
-
-
-

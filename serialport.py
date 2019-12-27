@@ -1,4 +1,3 @@
-from ipdb import set_trace
 import serial
 import threading
 import queue as Queue
