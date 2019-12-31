@@ -46,7 +46,8 @@ class SerialPort(object):
         logger.info("SerialPort.loop_read Run")
         while True:
             try:
-                c = self.port.read()
+                bytes_to_read = self.port.inWaiting()
+                c = self.port.read(bytes_to_read)
                 if c:
                     # logger.debug("SerialPort.Read byte: [[%s]]" % c)
                     recv_serial.notice(c.decode())
