@@ -4,9 +4,13 @@ import time
 import queue as Queue
 
 from data import logger
-from data import queue
+# from data import queue
 from data import conf
+from data import recv_serial
 from enums import KEYBOARD
+from observe import Observer
+
+from connect import Telnet
 
 
 class Screen(object):
@@ -23,10 +27,14 @@ class Screen(object):
         self.init_curses()
 
         self.port = port
+        conf.port = port
+        self._observer = Observer()
+        recv_serial.add_observer(self._observer)
 
     def init_curses(self):
 
         self._window = curses.initscr()
+        conf.window = self._window
         self._window.keypad(True)
         self._window.scrollok(True)
         self._window.clear()
@@ -49,14 +57,14 @@ class Screen(object):
             if ch == curses.KEY_MOUSE:
                 pass
             elif ch == 17:  # Ctrl + Q
-                logger.debug('Screen.keyboard_input >>Ctrl + Q<<')
+                # logger.debug('Screen.keyboard_input >>Ctrl + Q<<')
                 exit()
             elif ch == 1:  # Ctrl + A
                 logger.info("Screen.keyboard_input: Menu.run()")
                 self._menu.run()
                 self._window.refresh()
             else:
-                logger.debug('Screen.keyboard_input >>%s<<' % chr(ch))
+                # logger.debug('Screen.keyboard_input >>%s<<' % chr(ch))
                 self.port.write(ch)
 
     def display_buffer(self):
@@ -65,24 +73,25 @@ class Screen(object):
         logger.info("Screen.display_buffer Run")
         while True:
             try:
-                e = queue.get(timeout=0.1)
+                e = self._observer.get(timeout=0.1)
                 if e == "\n":
                     self._window.scroll()
                     pos = 1
 
                 else:
-                    logger.debug("Screen.display_buffer get Char: %s" % e)
+                    # logger.debug("Screen.display_buffer get Char: %s" % e)
                     if (ord(e) == 8):  # 退格
-                        logger.debug("Screen.display_buffer BackSpace: %s" % e)
+                        # logger.debug("Screen.display_buffer BackSpace: %s" % e)
                         if pos > 0:
                             pos -= 1
                         curses.killchar()
                         self._window.move(self.y-1, pos)
 
                     elif (ord(e) == 7):  # 顶头
-                        logger.debug("Screen.display_buffer LEFT: %s" % ord(e))
+                        # logger.debug("Screen.display_buffer LEFT: %s" % ord(e))
                         curses.flash()
                     else:
+                        # FIXME 当一排超出屏幕会有问题
                         self._window.addstr(self.y-1, pos, e)
                         pos += 1
 
@@ -143,9 +152,7 @@ class Menu(object):
         res = ['CollConsole Command Summary']
         res.append('')
 
-        res.append('connect HTTP on/off....H')
-
-        conf.http = False
+        res.append('connect Telnet on/off....T')
 
         return res
 
@@ -168,9 +175,18 @@ class Menu(object):
                 self._window.refresh()
                 break
 
-            if (chr(k).upper() == 'H'):
-                conf.http = not conf.http
-                logger.info("Connect %s HTTP" % conf.http)
+            if (chr(k).upper() == 'T'):
+                if conf.telnet is None:
+                    conf.telnet = Telnet()
+                    th = conf.telnet.thread_run()
+                    th.start()
+
+                if conf.telnet:
+                    conf.telnet = None
+
+                logger.info("Connect %s TELNET" % conf.telnet)
 
     def getch(self):
         return self._window.getch()
+
+

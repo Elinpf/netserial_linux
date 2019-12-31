@@ -2,8 +2,9 @@ import serial
 import threading
 import queue as Queue
 
-from data import queue
+# from data import queue
 from data import logger
+from data import recv_serial
 from enums import KEYBOARD
 
 
@@ -20,13 +21,23 @@ class SerialPort(object):
     def write(self, c: int):
         """对每个输入的字符进行写入"""
         if c == KEYBOARD.BackSpace:
-            logger.debug("SerialPort.write <BackSpace>")
+            # logger.debug("SerialPort.write <BackSpace>")
             self.port.write(b'\x08')
+
         elif c == KEYBOARD.Enter:
             self.port.write(b'\r')
+
+        elif c == KEYBOARD.Ctrl_C:
+            self.port.sendbreak()
+
         else:
-            logger.debug("SerialPort.write Char int: %s" % c)
+            # logger.debug("SerialPort.write Char int: %s" % c)
             self.port.write(chr(c).encode())
+
+    def write_stream(self, stream):
+        """对一串流的写入"""
+        for s in stream:
+            self.write(s)
 
     def thread_loop_read(self):
         return threading.Thread(target=self.loop_read)
@@ -37,7 +48,7 @@ class SerialPort(object):
             try:
                 c = self.port.read()
                 if c:
-                    logger.debug("SerialPort.Read byte: [[%s]]" % c)
-                    queue.put(c.decode())
+                    # logger.debug("SerialPort.Read byte: [[%s]]" % c)
+                    recv_serial.notice(c.decode())
             except Queue.Empty:
                 pass
