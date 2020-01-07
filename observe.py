@@ -1,4 +1,4 @@
-from queue import Queue
+import queue
 
 class RecvSerialPort(object):
     """观察者模式"""
@@ -20,7 +20,7 @@ class RecvSerialPort(object):
 class Observer(object):
 
     def __init__(self):
-        self._queue = Queue()
+        self._queue = queue.Queue()
 
     def put(self, c):
         self._queue.put(c)
@@ -29,7 +29,6 @@ class Observer(object):
         try:
             return self._queue.get_nowait()
 
-        # FIXME Queue.Empty
-        except:
+        except queue.Empty:
             return ""
 
