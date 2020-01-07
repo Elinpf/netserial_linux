@@ -26,5 +26,10 @@ class Observer(object):
         self._queue.put(c)
 
     def get(self, timeout=0.1):
-        return self._queue.get(timeout)
+        try:
+            return self._queue.get_nowait()
+
+        # FIXME Queue.Empty
+        except:
+            return ""
 

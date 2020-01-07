@@ -27,15 +27,19 @@ class SerialPort(object):
         elif c == KEYBOARD.Enter:
             self.port.write(b'\r')
 
-        elif c == KEYBOARD.Ctrl_C:
-            self.port.sendbreak()
+        # elif c == KEYBOARD.Ctrl_C:
+            # self.port.sendbreak()
 
         else:
             # logger.debug("SerialPort.write Char int: %s" % c)
             self.port.write(chr(c).encode())
 
+    def write_byte(self, b: bytes):
+        self.write(ord(b))
+
     def write_stream(self, stream):
         """对一串流的写入"""
+        # logger.debug('SerialPort.write_stream: %s' % stream)
         for s in stream:
             self.write(s)
 

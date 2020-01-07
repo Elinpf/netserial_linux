@@ -4,6 +4,19 @@ import select
 import threading
 from data import conf
 
+from enums import KEYBOARD
+
+
+def clean_text(text):
+
+    if text[0] == 255:
+        return ""
+
+    if text[0] == 13:
+        return b'\r'
+
+    logger.debug('clean_text: %s' % text[0])
+    return text
 
 class Connection(object):
 
@@ -21,15 +34,16 @@ class Connection(object):
     def init_tcp(self):
         """
         set up telnet
-        don't want linemode
-        don't want echo
         """
 
-        data = chr(255) + chr(254) + chr(34)
-        self.send_tcp(data)
+        # IAC WILL ECHO
+        self._socket.send(bytes.fromhex('fffb01'))
 
-        data = chr(255) + chr(254) + chr(1)
-        self.send_tcp(data)
+        # IAC DONT ECHO 这个无法使用
+        # self._socket.send(bytes.fromhex('fffe01'))
+
+        # don't want linemode
+        self._socket.send(bytes.fromhex('fffb22'))
 
         self.send_tcp(
             "************************************************\r\n")
@@ -47,6 +61,7 @@ class Connection(object):
         return self._socket.recv(1024)
 
     def send_serial(self, data):
+        data = clean_text(data)
         self._port.write_stream(data)
 
     def recv_serial(self):
@@ -55,7 +70,7 @@ class Connection(object):
 
 class Telnet(object):
 
-    def __init__(self, listen=33):
+    def __init__(self, listen=23):
 
         self._listen = listen
 
@@ -68,60 +83,17 @@ class Telnet(object):
     def start_new_listener(self):
         self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.listener.bind(('127.0.0.1', self._listen))
-        self.listener.listen()
+        self.listener.bind(('', self._listen))
+        self.listener.listen(32)
         logger.info("Telnet.Start_new_listen OK")
 
     def __bool__(self):
         return True
 
-    def run_(self):
-        logger.debug('Telnet.run:  Start to Run')
-        while True:
-            # 当从串口收到了信息
-            for conn in self.clist:
-                if isinstance(conn, Connection):
-                    data = conn.recv_serial()
-                    if data:
-                        self.connection.send_tcp(data)
-
-            ready = self.clist
-            if self.listener:
-                ready.append(self.listener)
-
-            ready = select.select(ready, [], [], 0.1)[0]
-
-            logger.debug('Telnet.run self.clist => %s' % ready)
-            for conn in ready:
-
-                if conn is self.listener:
-                    logger.debug('In')
-                    socket, address = self.listener.accept()
-
-                    c = Connection(socket, conf.port)
-                    c.init_tcp()
-                    self.clist.append(c)
-                    logger.debug('Telnet append(%s)' % type(c))
-
-                    self.listener = None  # 不需要了
-                    logger.info("Telnet: init connection")
-
-                else:
-                    logger.debug('Telnet.run: conn => %s' % type(conn))
-                    data = conn.recv_tcp()
-                    if not data:
-                        logger.info("Telnet Close, restart")
-                        self.clist.remove(conn)
-                        self.start_new_listener()
-
-                    else:
-                        conn.send_serial(data)
 
     def run(self):
-
         while True:
-            # 当从串口收到了信息
-            for conn in self.clist:
+            for conn in self.clist[:]:
                 if isinstance(conn, Connection):
                     data = conn.recv_serial()
                     if data:
@@ -129,30 +101,30 @@ class Telnet(object):
 
             ready = self.clist[:]
 
-            if self.listener is not None:
-                self.clist.append(self.listener)
+            if self.listener:
+                ready.append(self.listener)
 
-            ready = select.select(ready, [], [], 0.1)[0]
+            ready = select.select(ready, ready, [], 0.1)[0]
 
             for conn in ready:
-                # 当还是linsten 的时候，需要连接
                 if conn is self.listener:
-                    socket, address = self.listener.accept()
-                    cn = Connection(socket, conf.port)
-                    cn.init_tcp()
-                    self.clist.append(cn)
+                    _socket, address = self.listener.accept()
+                    conn = Connection(_socket, conf.port)
+                    self.clist.append(conn)
+                    conn.init_tcp()
+
                     self.listener = None
 
-
-                elif isinstance(conn, Connection):
+                else:
                     data = conn.recv_tcp()
-                    if not data:
-                        logger.info('Telnet Close, restart')
-                        self.clist.clear()
-                        self.start_new_listener()
+
+                    if data:
+                        conn.send_serial(data)
 
                     else:
-                        conn.send_serial(data)
+                        print("TCP connection closed.")
+                        self.clist.remove(conn)
+                        self.start_new_listener()
 
     def thread_run(self):
         return threading.Thread(target=self.run)
