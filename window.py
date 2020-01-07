@@ -18,9 +18,6 @@ class Screen(object):
 
     def __init__(self, port):
 
-        self.y = 0
-        self.x = 0
-
         self.top = 0
 
         self._window = None
@@ -45,8 +42,6 @@ class Screen(object):
         curses.start_color()
 
         self._menu = Menu(self._window)
-
-        self.y, self.x = self._window.getmaxyx()
 
     def keyboard_input(self):
         """这里获取输入并写入serialport"""
@@ -73,6 +68,8 @@ class Screen(object):
         logger.info("Screen.display_buffer Run")
         while True:
             try:
+                y, x = self._window.getmaxyx()
+
                 stream = self._observer.get(timeout=0.1)
 
                 for e in stream:
@@ -81,20 +78,19 @@ class Screen(object):
                         pos = 1
 
                     else:
-                        # logger.debug("Screen.display_buffer get Char: %s" % e)
                         if (ord(e) == 8):  # 退格
-                            # logger.debug("Screen.display_buffer BackSpace: %s" % e)
                             if pos > 0:
                                 pos -= 1
                             curses.killchar()
-                            self._window.move(self.y-1, pos)
+                            self._window.move(y-1, pos)
 
                         elif (ord(e) == 7):  # 顶头
-                            # logger.debug("Screen.display_buffer LEFT: %s" % ord(e))
                             curses.flash()
                         else:
-                            # FIXME 当一排超出屏幕会有问题
-                            self._window.addstr(self.y-1, pos, e)
+                            if pos >= x:
+                                self._window.scroll()
+                                pos = 1
+                            self._window.addstr(y-1, pos, e)
                             pos += 1
 
                     self._window.refresh()  # 需要重新刷新
@@ -190,5 +186,3 @@ class Menu(object):
 
     def getch(self):
         return self._window.getch()
-
-
