@@ -1,8 +1,7 @@
 import serial
 import threading
-import queue as Queue
+import select
 
-# from data import queue
 from data import logger
 from data import recv_serial
 from enums import KEYBOARD
@@ -49,11 +48,12 @@ class SerialPort(object):
     def loop_read(self):
         logger.info("SerialPort.loop_read Run")
         while True:
-            try:
+            ready = select.select([self.port], [], [], 5)[0]
+
+            if ready:
                 bytes_to_read = self.port.inWaiting()
                 c = self.port.read(bytes_to_read)
+                logger.debug('loop_read:IN')
                 if c:
                     # logger.debug("SerialPort.Read byte: [[%s]]" % c)
                     recv_serial.notice(c.decode())
-            except Queue.Empty:
-                pass

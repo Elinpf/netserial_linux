@@ -104,7 +104,7 @@ class Telnet(object):
             if self.listener:
                 ready.append(self.listener)
 
-            ready = select.select(ready, ready, [], 0.1)[0]
+            ready = select.select(ready, ready, [], 5)[0]
 
             for conn in ready:
                 if conn is self.listener:

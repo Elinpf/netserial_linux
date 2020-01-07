@@ -1,10 +1,8 @@
 import curses
 import threading
 import time
-import queue as Queue
 
 from data import logger
-# from data import queue
 from data import conf
 from data import recv_serial
 from enums import KEYBOARD
@@ -49,17 +47,16 @@ class Screen(object):
         while True:
             ch = self._window.getch()
 
+            logger.debug('keyboard_input:In')
             if ch == curses.KEY_MOUSE:
                 pass
             elif ch == 17:  # Ctrl + Q
-                # logger.debug('Screen.keyboard_input >>Ctrl + Q<<')
                 exit()
             elif ch == 1:  # Ctrl + A
                 logger.info("Screen.keyboard_input: Menu.run()")
                 self._menu.run()
                 self._window.refresh()
             else:
-                # logger.debug('Screen.keyboard_input >>%s<<' % chr(ch))
                 self.port.write(ch)
 
     def display_buffer(self):
@@ -67,36 +64,33 @@ class Screen(object):
 
         logger.info("Screen.display_buffer Run")
         while True:
-            try:
-                y, x = self._window.getmaxyx()
+            y, x = self._window.getmaxyx()
 
-                stream = self._observer.get(timeout=0.1)
+            stream = self._observer.get(timeout=5)
+            logger.debug('display_buffer:In')
 
-                for e in stream:
-                    if e == "\n":
-                        self._window.scroll()
-                        pos = 1
+            for e in stream:
+                if e == "\n":
+                    self._window.scroll()
+                    pos = 1
 
+                else:
+                    if (ord(e) == 8):  # 退格
+                        if pos > 0:
+                            pos -= 1
+                        curses.killchar()
+                        self._window.move(y-1, pos)
+
+                    elif (ord(e) == 7):  # 顶头
+                        curses.flash()
                     else:
-                        if (ord(e) == 8):  # 退格
-                            if pos > 0:
-                                pos -= 1
-                            curses.killchar()
-                            self._window.move(y-1, pos)
+                        if pos >= x:
+                            self._window.scroll()
+                            pos = 1
+                        self._window.addstr(y-1, pos, e)
+                        pos += 1
 
-                        elif (ord(e) == 7):  # 顶头
-                            curses.flash()
-                        else:
-                            if pos >= x:
-                                self._window.scroll()
-                                pos = 1
-                            self._window.addstr(y-1, pos, e)
-                            pos += 1
-
-                    self._window.refresh()  # 需要重新刷新
-            except Queue.Empty:
-                time.sleep(0.1)
-                pass
+                self._window.refresh()  # 需要重新刷新
 
     def thread_keyboard_input(self):
         return threading.Thread(target=self.keyboard_input)

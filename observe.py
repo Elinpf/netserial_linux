@@ -1,4 +1,6 @@
-import queue
+# import queue
+import multiprocessing as mp
+import select
 
 class RecvSerialPort(object):
     """观察者模式"""
@@ -20,15 +22,23 @@ class RecvSerialPort(object):
 class Observer(object):
 
     def __init__(self):
-        self._queue = queue.Queue()
+        # self._queue = queue.Queue()
+        self._queue = mp.Queue()
 
     def put(self, c):
         self._queue.put(c)
 
     def get(self, timeout=0.1):
-        try:
-            return self._queue.get_nowait()
+        """
+        multiprocessing 的方法是在: 
+        https://stackoverflow.com/questions/1123855/select-on-multiple-python-multiprocessing-queues
 
-        except queue.Empty:
+        还有一种是手动锁定，不需要使用select, 对windows方便
+        https://stackoverflow.com/questions/17495877/python-how-to-wait-on-both-queue-and-a-socket-on-same-time
+        """
+        ready = select.select([self._queue._reader], [], [], timeout)[0]
+        if ready:
+            return self._queue.get_nowait()
+        else:
             return ""
 
