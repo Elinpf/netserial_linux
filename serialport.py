@@ -20,7 +20,6 @@ class SerialPort(object):
     def write(self, c: int):
         """对每个输入的字符进行写入"""
         if c == KEYBOARD.BackSpace:
-            # logger.debug("SerialPort.write <BackSpace>")
             self.port.write(b'\x08')
 
         elif c == KEYBOARD.Enter:
@@ -30,7 +29,6 @@ class SerialPort(object):
             # self.port.sendbreak()
 
         else:
-            # logger.debug("SerialPort.write Char int: %s" % c)
             self.port.write(chr(c).encode())
 
     def write_byte(self, b: bytes):
@@ -38,7 +36,6 @@ class SerialPort(object):
 
     def write_stream(self, stream):
         """对一串流的写入"""
-        # logger.debug('SerialPort.write_stream: %s' % stream)
         for s in stream:
             self.write(s)
 
@@ -53,7 +50,5 @@ class SerialPort(object):
             if ready:
                 bytes_to_read = self.port.inWaiting()
                 c = self.port.read(bytes_to_read)
-                logger.debug('loop_read:IN')
                 if c:
-                    # logger.debug("SerialPort.Read byte: [[%s]]" % c)
                     recv_serial.notice(c.decode())

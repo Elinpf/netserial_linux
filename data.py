@@ -4,6 +4,7 @@ from queue import Queue as queue_module
 from observe import RecvSerialPort
 
 conf = AttribDict()
+import settings
 
 conf.telnet = None
 

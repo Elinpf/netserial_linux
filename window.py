@@ -32,6 +32,17 @@ class Screen(object):
         conf.window = self._window
         self._window.keypad(True)
         self._window.scrollok(True)
+
+        curses.start_color()
+        curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_WHITE)
+
+        # 留出最底端
+        self._window.idlok(False)
+        y, x = self._window.getmaxyx()
+        self._window.setscrreg(0, y-2)
+
+        self._statusbar = StatusBar(self._window)
+
         self._window.clear()
 
         curses.noecho()
@@ -47,7 +58,6 @@ class Screen(object):
         while True:
             ch = self._window.getch()
 
-            logger.debug('keyboard_input:In')
             if ch == curses.KEY_MOUSE:
                 pass
             elif ch == 17:  # Ctrl + Q
@@ -67,30 +77,33 @@ class Screen(object):
             y, x = self._window.getmaxyx()
 
             stream = self._observer.get(timeout=5)
-            logger.debug('display_buffer:In')
+
+            self._statusbar.display_statusbar(y, x)
 
             for e in stream:
                 if e == "\n":
                     self._window.scroll()
                     pos = 1
 
-                else:
-                    if (ord(e) == 8):  # 退格
-                        if pos > 0:
-                            pos -= 1
-                        curses.killchar()
-                        self._window.move(y-1, pos)
+                elif (ord(e) == 8):  # 退格
+                    if pos > 0:
+                        pos -= 1
+                    curses.killchar()
+                    self._window.move(y-2, pos)
 
-                    elif (ord(e) == 7):  # 顶头
-                        curses.flash()
-                    else:
-                        if pos >= x:
-                            self._window.scroll()
-                            pos = 1
-                        self._window.addstr(y-1, pos, e)
-                        pos += 1
+                elif (ord(e) == 7):  # 顶头
+                    curses.flash()
+                    self._window.move(y-2, pos)
 
-                self._window.refresh()  # 需要重新刷新
+                else: # 实际内容
+                    if pos >= x:
+                        self._window.scroll()
+                        pos = 1
+                    self._window.addstr(y-2, pos, e)
+                    pos += 1
+
+            self._window.refresh()  # 需要重新刷新
+
 
     def thread_keyboard_input(self):
         return threading.Thread(target=self.keyboard_input)
@@ -180,3 +193,28 @@ class Menu(object):
 
     def getch(self):
         return self._window.getch()
+
+class StatusBar:
+    """最底下的状态栏"""
+
+    def __init__(self, window):
+        self._window = window
+
+    def get_status(self, x):
+        msg = []
+
+        msg.append('Ctrl + A for help')
+
+        msg.append('%s %s' % (conf.serial_port, conf.baudrate))
+
+        msg = " | ".join(msg)
+        _ = msg + " " * (x - len(msg))
+        return _
+
+    def display_statusbar(self, y, x):
+        """添加状态栏"""
+        self._window.attron(curses.color_pair(1))
+        msg = self.get_status(x)
+        self._window.addstr(y-1, 0, msg)
+        self._window.attroff(curses.color_pair(1))
+

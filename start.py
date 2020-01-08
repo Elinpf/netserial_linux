@@ -3,8 +3,9 @@ import threading
 from serialport import SerialPort
 from window import Screen
 from debug import debug
+from data import conf
 
-port = SerialPort('/dev/rfcomm0', 9600)
+port = SerialPort(conf.serial_port, conf.baudrate)
 
 screen = Screen(port)
 
