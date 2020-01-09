@@ -11,8 +11,16 @@ class SerialPort(object):
 
     def __init__(self, serialfile, baud):
 
-        self.port = serial.Serial(serialfile, baudrate=baud, timeout=None, parity=serial.PARITY_NONE,
-                                  bytesize=serial.EIGHTBITS, stopbits=serial.STOPBITS_ONE, xonxoff=False)
+        if baud not in serial.Serial.BAUDRATES:
+            print("波特率%s是错误的,请重新选择" % baud)
+            exit()
+
+        try:
+            self.port = serial.Serial(serialfile, baudrate=baud, timeout=None, parity=serial.PARITY_NONE,
+                                      bytesize=serial.EIGHTBITS, stopbits=serial.STOPBITS_ONE, xonxoff=False)
+        except serial.serialutil.SerialException:
+            print("未成功打开串口 %s , 是否没有打开串口" % serialfile)
+            exit()
 
         self.port.flushInput()
         print(self.port.name)
@@ -24,9 +32,6 @@ class SerialPort(object):
 
         elif c == KEYBOARD.Enter:
             self.port.write(b'\r')
-
-        # elif c == KEYBOARD.Ctrl_C:
-            # self.port.sendbreak()
 
         else:
             self.port.write(chr(c).encode())

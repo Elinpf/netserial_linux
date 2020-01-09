@@ -28,7 +28,7 @@ class Observer(object):
     def put(self, c):
         self._queue.put(c)
 
-    def get(self, timeout=0.1):
+    def get(self, timeout=None):
         """
         multiprocessing 的方法是在: 
         https://stackoverflow.com/questions/1123855/select-on-multiple-python-multiprocessing-queues

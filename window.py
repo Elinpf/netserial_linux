@@ -1,6 +1,7 @@
 import curses
 import threading
 import time
+import math
 
 from data import logger
 from data import conf
@@ -9,6 +10,7 @@ from enums import KEYBOARD
 from observe import Observer
 
 from connect import Telnet
+import features
 
 
 class Screen(object):
@@ -36,11 +38,6 @@ class Screen(object):
         curses.start_color()
         curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_WHITE)
 
-        # 留出最底端
-        self._window.idlok(False)
-        y, x = self._window.getmaxyx()
-        self._window.setscrreg(0, y-2)
-
         self._statusbar = StatusBar(self._window)
 
         self._window.clear()
@@ -50,7 +47,7 @@ class Screen(object):
         curses.mousemask(-1)
         curses.start_color()
 
-        self._menu = Menu(self._window)
+        self._menu = MenuEx(self._window)
 
     def keyboard_input(self):
         """这里获取输入并写入serialport"""
@@ -70,13 +67,14 @@ class Screen(object):
                 self.port.write(ch)
 
     def display_buffer(self):
+        """作为显示主界面的循环"""
         pos = 1
 
         logger.info("Screen.display_buffer Run")
         while True:
             y, x = self._window.getmaxyx()
 
-            stream = self._observer.get(timeout=5)
+            stream = self._observer.get()
 
             self._statusbar.display_statusbar(y, x)
 
@@ -95,7 +93,7 @@ class Screen(object):
                     curses.flash()
                     self._window.move(y-2, pos)
 
-                else: # 实际内容
+                else:  # 实际内容
                     if pos >= x:
                         self._window.scroll()
                         pos = 1
@@ -103,7 +101,6 @@ class Screen(object):
                     pos += 1
 
             self._window.refresh()  # 需要重新刷新
-
 
     def thread_keyboard_input(self):
         return threading.Thread(target=self.keyboard_input)
@@ -145,54 +142,68 @@ def yxcenter(scr, text=""):
     return ny, nx
 
 
-class Menu(object):
+class MenuEx:
 
-    def __init__(self, stdscr):
-        y, x = yxcenter(stdscr)
+    def __init__(self, window):
+        """
+        @_items
+        {sortkey: [description, dirct_function]}
+        """
+        self._window = window
+        self._menu = None
+        self._options = {}
 
-        self._window = curses.newwin(10, 40, y-5, x-20)
-        self._window.border(1)
+        self.max_long = 60
 
-    def menu_bar(self):
-        res = ['CollConsole Command Summary']
-        res.append('')
+        self.add_item('t', 'connection Telnet turn on/off', features.telnet)
 
-        res.append('connect Telnet on/off....T')
-
-        return res
-
-    def show_menu(self):
-        index = 1
-        for i in self.menu_bar():
-            self._window.addstr(index, 2, i)
-            index += 1
-
-        self._window.refresh()
-
-    def run(self):
-        self.show_menu()
-        while (True):
-            k = self.getch()
-            logger.debug("Menu.run: getch>>%s<<" % k)
-
-            if (k == ord('q') or k == KEYBOARD.Esc):
-                self._window.clear()
-                self._window.refresh()
-                break
-
-            if (chr(k).upper() == 'T'):
-                if conf.telnet is None:
-                    conf.telnet = Telnet()
-                    th = conf.telnet.thread_run()
-                    th.start()
-
-                if conf.telnet:
-                    conf.telnet = None
-
-                logger.info("Connect %s TELNET" % conf.telnet)
+    def add_item(self, sortkey, description, dirct_func):
+        """添加选项"""
+        self._options[sortkey.upper()] = [description, dirct_func]
 
     def getch(self):
-        return self._window.getch()
+        return self._menu.getch()
+
+    def display_menu(self):
+        buf = []
+        buf.append("CollConsole Command Summary")
+        buf.append("---------------------------")
+        buf.append("")
+
+        for k, v in self._options.items():
+            desc = v[0]
+            msg = desc + "." * (self.max_long-10-len(desc)) + k
+            buf.append(msg)
+
+        y, x = yxcenter(self._window)
+
+        self._menu = curses.newwin(
+            len(buf)+2, self.max_long, y-math.ceil(len(buf)/2), x-math.ceil(self.max_long/2))
+
+        index = 1
+        for i in buf:
+            self._menu.addstr(index, 2, i)
+            index += 1
+
+        # self._menu.border('|', '-', '+')
+        self._menu.box()
+        self._menu.refresh()
+
+    def run(self):
+        self.display_menu()
+
+        while True:
+            k = self.getch()
+            if (k == ord('q') or k == KEYBOARD.Esc):
+                self._menu.clear()
+                self._menu.refresh()
+                break
+
+            # 执行指令
+            elif chr(k).upper() in self._options.keys():
+                func = self._options[chr(k).upper()][1]
+                func()
+
 
 class StatusBar:
     """最底下的状态栏"""
@@ -203,9 +214,17 @@ class StatusBar:
     def get_status(self, x):
         msg = []
 
-        msg.append('Ctrl + A for help')
+        msg.append('Ctrl + A to open menu')
 
         msg.append('%s %s' % (conf.serial_port, conf.baudrate))
+
+        if conf.telnet:
+            if conf.telnet_join:
+                msg.append('Telnet Status: Connect')
+            else:
+                msg.append('Telnet Status: Listen')
+
+
 
         msg = " | ".join(msg)
         _ = msg + " " * (x - len(msg))
@@ -213,8 +232,9 @@ class StatusBar:
 
     def display_statusbar(self, y, x):
         """添加状态栏"""
+        self._window.setscrreg(0, y-2)
         self._window.attron(curses.color_pair(1))
         msg = self.get_status(x)
         self._window.addstr(y-1, 0, msg)
         self._window.attroff(curses.color_pair(1))
-
+        self._window.refresh()

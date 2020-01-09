@@ -15,7 +15,6 @@ def clean_text(text):
     if text[0] == 13:
         return b'\r'
 
-    logger.debug('clean_text: %s' % text[0])
     return text
 
 class Connection(object):
@@ -67,6 +66,9 @@ class Connection(object):
     def recv_serial(self):
         return self._observer.get(timeout=0.1)
 
+    def close(self):
+        self._socket.close()
+
 
 class Telnet(object):
 
@@ -79,17 +81,22 @@ class Telnet(object):
         self.clist = []
 
         self.start_new_listener()
+        self.thread = None
 
     def start_new_listener(self):
         self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.listener.bind(('', self._listen))
-        self.listener.listen(32)
+        self.listener.listen()
         logger.info("Telnet.Start_new_listen OK")
 
     def __bool__(self):
         return True
 
+    def close(self):
+        self.thread_stop()
+        self.clist = []
+        logger.info("connect.Telnet closed")
 
     def run(self):
         while True:
@@ -99,12 +106,17 @@ class Telnet(object):
                     if data:
                         conn.send_tcp(data)
 
-            ready = self.clist[:]
+            ready = self.clist[:] # 加了[:]相当于新建一个实例
 
             if self.listener:
                 ready.append(self.listener)
 
-            ready = select.select(ready, ready, [], 5)[0]
+            ready = select.select(ready, ready, [], 2)[0]
+
+            if self.stop_thread:
+                for conn in self.clist:
+                    conn.close()
+                break
 
             for conn in ready:
                 if conn is self.listener:
@@ -112,6 +124,7 @@ class Telnet(object):
                     conn = Connection(_socket, conf.port)
                     self.clist.append(conn)
                     conn.init_tcp()
+                    conf.telnet_join = True
 
                     self.listener = None
 
@@ -119,12 +132,26 @@ class Telnet(object):
                     data = conn.recv_tcp()
 
                     if data:
-                        conn.send_serial(data)
+                        if data[0] == KEYBOARD.Ctrl_C: # 主动终端
+                            conn.close()
+                            self.clist.remove(conn)
+                            self.start_new_listener()
+                            conf.telnet_join = False
+
+                        else:
+                            conn.send_serial(data)
 
                     else:
-                        print("TCP connection closed.")
+                        # print("TCP connection closed.")
                         self.clist.remove(conn)
                         self.start_new_listener()
+                        conf.telnet_join = False
 
     def thread_run(self):
-        return threading.Thread(target=self.run)
+        self.stop_thread = False
+        th = threading.Thread(target=self.run)
+        th.start()
+        return th
+
+    def thread_stop(self):
+        self.stop_thread = True
