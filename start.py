@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import threading
 
 from serialport import SerialPort

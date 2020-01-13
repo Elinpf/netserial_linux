@@ -132,7 +132,7 @@ class Telnet(object):
                     data = conn.recv_tcp()
 
                     if data:
-                        if data[0] == KEYBOARD.Ctrl_C: # 主动终端
+                        if data[0] == KEYBOARD.Ctrl_C: # 主动中断
                             conn.close()
                             self.clist.remove(conn)
                             self.start_new_listener()
@@ -141,8 +141,7 @@ class Telnet(object):
                         else:
                             conn.send_serial(data)
 
-                    else:
-                        # print("TCP connection closed.")
+                    else: # 远端关闭
                         self.clist.remove(conn)
                         self.start_new_listener()
                         conf.telnet_join = False

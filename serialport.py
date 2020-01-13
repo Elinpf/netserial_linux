@@ -2,6 +2,7 @@ import serial
 import threading
 import select
 
+from data import conf
 from data import logger
 from data import recv_serial
 from enums import KEYBOARD
@@ -23,7 +24,6 @@ class SerialPort(object):
             exit()
 
         self.port.flushInput()
-        print(self.port.name)
 
     def write(self, c: int):
         """对每个输入的字符进行写入"""
@@ -45,12 +45,12 @@ class SerialPort(object):
             self.write(s)
 
     def thread_loop_read(self):
-        return threading.Thread(target=self.loop_read)
+        return threading.Thread(target=self.loop_read, name='serialport_thread')
 
     def loop_read(self):
         logger.info("SerialPort.loop_read Run")
-        while True:
-            ready = select.select([self.port], [], [], 5)[0]
+        while conf.process_running:
+            ready = select.select([self.port], [], [], 1)[0]
 
             if ready:
                 bytes_to_read = self.port.inWaiting()

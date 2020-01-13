@@ -12,7 +12,7 @@ logging.basicConfig(format='%(asctime)-6s: - %(levelname)s - %(message)s', level
 
 logger = logging.getLogger('serialLogger')
 
-logger.debug("============= Start New Process ===============")
+logger.info("============= Start New Process =============")
 
 
 # 队列
