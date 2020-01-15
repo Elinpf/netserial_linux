@@ -34,6 +34,8 @@ class Screen(object):
         self._observer = Observer()
         recv_serial.add_observer(self._observer)
 
+        self._block_time = {}
+
     def init_curses(self):
 
         self._window = curses.initscr()
@@ -50,7 +52,6 @@ class Screen(object):
 
         curses.noecho()
         curses.cbreak()
-        curses.mousemask(-1)
         curses.start_color()
 
         self._menu = MenuEx(self._window)
@@ -61,21 +62,24 @@ class Screen(object):
         while conf.process_running:
             ch = self._window.getch()
 
-            if ch == curses.KEY_MOUSE:
-                if ch == curses.BUTTON4_PRESSED:
-                    logger.debug('keyboard mouse input %s' % ch)
-                pass
+            if ch == curses.KEY_SELECT:
+                logger.debug('keyboard mouse select input %s' % ch)
 
-            elif ch == KEYBOARD.Ctrl_A:  # Ctrl + A
-                logger.info("Screen.keyboard_input: Menu.run()")
+
+            elif ch == curses.KEY_MOUSE:
+                logger.debug('keyboard mouse input %s' % ch)
+
+            elif ch == KEYBOARD.Ctrl_A:  # Menu
                 self._menu.run()
                 self._window.refresh()
 
             elif ch == KEYBOARD.Up:
-                self.port.write_hex('1b5b41')
+                if not self.block_key(ch):
+                    self.port.write_hex('1b5b41')
 
             elif ch == KEYBOARD.Down:
-                self.port.write_hex('1b5b42')
+                if not self.block_key(ch):
+                    self.port.write_hex('1b5b42')
 
             elif ch == KEYBOARD.Right:
                 self.port.write_hex('1b5b43')
@@ -85,6 +89,22 @@ class Screen(object):
 
             else:
                 self.port.write(ch)
+
+    def block_key(self, key: int, ms=0.1):
+        """用于阻塞单个通道, 如果阻塞，返回真"""
+        now_time = time.time()
+        if key in self._block_time.keys():
+            a_ = now_time - self._block_time[key]
+            if ms < a_:
+                self._block_time[key] = now_time
+                return False
+            else:
+                return True
+
+        else:
+            self._block_time[key] = now_time
+            return False
+
 
     def display_buffer(self):
         """作为显示主界面的循环"""
@@ -204,7 +224,7 @@ class MenuEx:
 
     def display_menu(self):
         buf = []
-        buf.append("CollConsole Command Summary")
+        buf.append("Netserial Command Summary")
         buf.append("---------------------------")
         buf.append("")
 
@@ -227,6 +247,7 @@ class MenuEx:
         self._menu.refresh()
 
     def run(self):
+        logger.info("MenuEx.run()")
         curses.curs_set(0)
         self.display_menu()
 

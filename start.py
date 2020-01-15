@@ -10,6 +10,4 @@ port = SerialPort(conf.serial_port, conf.baudrate)
 
 screen = Screen(port)
 
-screen.init_curses()
-
 screen.run()
