@@ -50,7 +50,7 @@ class Screen(object):
 
         curses.noecho()
         curses.cbreak()
-        curses.mousemask(True)
+        curses.mousemask(-1)
         curses.start_color()
 
         self._menu = MenuEx(self._window)
@@ -62,6 +62,8 @@ class Screen(object):
             ch = self._window.getch()
 
             if ch == curses.KEY_MOUSE:
+                if ch == curses.BUTTON4_PRESSED:
+                    logger.debug('keyboard mouse input %s' % ch)
                 pass
 
             elif ch == KEYBOARD.Ctrl_A:  # Ctrl + A
@@ -82,7 +84,6 @@ class Screen(object):
                 self.port.write_hex('1b5b44')
 
             else:
-                logger.debug('keyboard input %s' % ch)
                 self.port.write(ch)
 
     def display_buffer(self):
@@ -96,12 +97,13 @@ class Screen(object):
 
             stream = self._observer.get(timeout=1)
 
-            # FIXME 退出会有闪屏
             while self._menu.has_enable() and conf.process_running:
                 time.sleep(0.1)
 
+            if not conf.process_running:
+                break
+
             self._statusbar.display_statusbar(y, x)
-            # FIXME 崩溃问题
             self._window.move(y-2, pos)
 
             for e in stream:
@@ -124,7 +126,7 @@ class Screen(object):
                     curses.flash()
 
                 else:  # 实际内容
-                    if pos >= x:
+                    if pos >= x-1:
                         pos = 1
                     self._window.addstr(y-2, pos, e)
                     pos += 1
@@ -186,11 +188,11 @@ class MenuEx:
         self.max_long = 60
 
         self.add_item('t', 'connection Telnet turn on/off', features.telnet)
-        self.add_item('l', 'Capture file', features.capture)
+        self.add_item('l', 'capture file', features.capture)
         self.add_item('c', 'Close capture if open', features.close_capture)
         # self.add_item('b', 'send Break', features.send_break) # 没有此接口
 
-        self.add_item('q', 'Quit Process', features.exit)
+        self.add_item('q', 'Quit process', features.exit)
 
     def add_item(self, sortkey, description, dirct_func, quit_menu=True):
         """添加选项, 并且确定运行后是否退出菜单"""
@@ -214,7 +216,6 @@ class MenuEx:
         y, x = yxcenter(self._window)
 
         self._menu = curses.newwin(
-        # self._menu = self._window.subwin(  # FIXME 这里会偶尔出现问题
             len(buf)+2, self.max_long, y-math.ceil(len(buf)/2), x-math.ceil(self.max_long/2))
 
         index = 1
@@ -487,6 +488,7 @@ class ControlInput(Control):
         input_box = self.box.derwin(
             1, self.max_length - self._pos - 1, self.y, self._pos)
 
+        # NOTE 通过Esc来取消
         input_textbox = Textbox(input_box)
         input_textbox.edit()
         logger.debug('cotrol input -> %s' % input_textbox.gather())
