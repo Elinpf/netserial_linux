@@ -18,6 +18,9 @@ conf.process_running = True  # 控制进程
 conf.window = None  # 保存主屏幕
 conf.port = None  # 保存串口
 
+conf.y = 0  # 保存屏幕的y
+conf.x = 0  # 保存屏幕的x
+
 
 class Screen(object):
     """https://docs.python.org/3/howto/curses.html"""
@@ -82,11 +85,11 @@ class Screen(object):
             elif ch == KEYBOARD.Left:
                 self.port.write_hex('1b5b44')
 
-            elif ch == KEYBOARD.Page_UP:
+            elif ch == KEYBOARD.Page_UP or ch == KEYBOARD.Shift_Page_UP:
                 top, bottom = self._page.up()
                 self.refresh(top, bottom)
 
-            elif ch == KEYBOARD.Page_Down:
+            elif ch == KEYBOARD.Page_Down or ch == KEYBOARD.Shift_Page_Down:
                 top, bottom = self._page.down()
                 self.refresh(top, bottom)
             else:
@@ -100,11 +103,9 @@ class Screen(object):
             self._window.addstr(index, 1, l)
             index += 1
 
-        y, x = self._window.getmaxyx()
-        self._statusbar.display_statusbar(y, x)
-        self._window.addstr(y-2, 1, self._buff.cache)
+        self._statusbar.display_statusbar(conf.y, conf.x)
+        self._window.addstr(conf.y-2, 1, self._buff.cache)
         self._window.refresh()
-
 
     def block_key(self, key: int, ms=0.1):
         """用于阻塞单个通道, 如果阻塞，返回真"""
@@ -127,7 +128,7 @@ class Screen(object):
 
         logger.info("Screen.display_buffer Run")
         while conf.process_running:
-            y, x = self._window.getmaxyx()
+            conf.y, conf.x = self._window.getmaxyx()
 
             stream = self._observer.get(timeout=1)
 
@@ -137,8 +138,8 @@ class Screen(object):
             if not conf.process_running:
                 break
 
-            self._statusbar.display_statusbar(y, x)
-            self._window.move(y-2, pos)
+            self._statusbar.display_statusbar(conf.y, conf.x)
+            self._window.move(conf.y-2, pos)
 
             for e in stream:
                 if e == "\n":
@@ -146,7 +147,7 @@ class Screen(object):
 
                     if self._page.count != 1:
                         self._page.reset()
-                        self.refresh(2-y, -1)
+                        self.refresh(2-conf.y, -1)
 
                     if features.has_capture():
                         conf.capture.info(self._buff.buff[-1])
@@ -158,18 +159,18 @@ class Screen(object):
                         pos -= 1
                     self._buff.delete()
                     curses.killchar()
-                    self._window.move(y-2, pos)
+                    self._window.move(conf.y-2, pos)
 
                 elif (ord(e) == 7):  # 顶头
-                    self._window.move(y-2, pos)
+                    self._window.move(conf.y-2, pos)
                     curses.flash()
 
                 else:  # 实际内容
-                    if pos >= x-1:
+                    if pos >= conf.x-1:
                         self._window.scroll()
                         pos = 1
                     self._buff.put(e)
-                    self._window.addstr(y-2, pos, e)
+                    self._window.addstr(conf.y-2, pos, e)
                     pos += 1
 
             self._window.refresh()  # 需要重新刷新
@@ -204,7 +205,7 @@ class Screen(object):
 
 class Buff:
 
-    def __init__(self, max_length = 2000):
+    def __init__(self, max_length=2000):
         self._buff = []  # 用于存放屏幕缓存
         self._cache = ""
         self._max_length = max_length
@@ -234,52 +235,48 @@ class Buff:
     def cache(self):
         return self._cache
 
+
 class Page:
 
-    def __init__(self, buff:Buff):
+    def __init__(self, buff: Buff):
         self.count = 1
         self._buff = buff
 
     def up(self):
         size = self.__len__()
 
-        y, x = conf.window.getmaxyx()
         if self.count < size:
-            bottom = (size - self.count -1) * (y-2)
-            top = bottom - y + 2
-            if top < 0: top = 0
+            bottom = (size - self.count - 1) * (conf.y-2)
+            top = bottom - conf.y + 2
+            if top < 0:
+                top = 0
             self.count += 1
             return (top, bottom)
 
         else:
-            return (0, y-2)
+            return (0, conf.y-2)
 
     def down(self):
         size = self.__len__()
         buff_length = len(self._buff)
-            
-        y, x = conf.window.getmaxyx()
+
         if self.count > 1:
-            bottom = (size - self.count +1) * (y-2)
+            bottom = (size - self.count + 1) * (conf.y-2)
             if bottom > buff_length:
                 bottom = buff_length
 
-            top = bottom - y + 2
+            top = bottom - conf.y + 2
             self.count -= 1
             return (top, bottom)
 
         else:
-            return (buff_length - y + 2, buff_length)
-            
-
+            return (buff_length - conf.y + 2, buff_length)
 
     def __len__(self):
-        y, x = conf.window.getmaxyx()
-        return len(self._buff) // (y-2) 
+        return len(self._buff) // (conf.y-2)
 
     def reset(self):
         self.count = 1
-
 
 
 def yxcenter(scr, text=""):
@@ -288,9 +285,8 @@ def yxcenter(scr, text=""):
     scr.addstr() for the provided text to be drawn in the horizontal and
     vertical center of the window.
     '''
-    y, x = scr.getmaxyx()
-    nx = (x // 2) - (len(text) // 2)
-    ny = (y // 2) - (len(text.split('\n')) // 2)
+    nx = (conf.x // 2) - (len(text) // 2)
+    ny = (conf.y // 2) - (len(text.split('\n')) // 2)
     return ny, nx
 
 
