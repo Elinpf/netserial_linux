@@ -13,6 +13,7 @@ conf.telnet_join = False  # 保存是否有Telnet会话进入
 
 def telnet():
     if conf.telnet is None:
+        logger.info('Open Telnet')
         conf.telnet = Telnet()
         conf.telnet_join = False
 
@@ -20,6 +21,7 @@ def telnet():
         return
 
     if conf.telnet:
+        logger.info('Close Telnet')
         conf.telnet.close()
         conf.telnet = None
         return
@@ -32,6 +34,7 @@ def exit():
     k = box.display()
 
     if k == 0:
+        logger.info("Exit")
         curses.endwin()
 
         logging.shutdown()
@@ -65,6 +68,7 @@ def capture():
         handle.setFormatter(log_format)
         conf.capture.addHandler(handle)
         conf.capture.setLevel(logging.INFO)
+        logger.info("Start Capture, filename is %s" % filename)
 
 
 def close_capture():
@@ -72,11 +76,11 @@ def close_capture():
     if has_capture():
         for h in conf.capture.handlers[:]:
             conf.capture.removeHandler(h)
+            logger.debug('Close Capture')
 
 
 def has_capture():
     """判断是否有记录文件"""
-
     if conf.capture:
         return len(conf.capture.handlers) > 0
 

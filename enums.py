@@ -10,3 +10,9 @@ class KEYBOARD(object):
     Left      = 260
     Right     = 261
 
+    # Page_UP   = 398
+    # Page_Down = 396
+
+    Page_UP   = 339
+    Page_Down = 338
+

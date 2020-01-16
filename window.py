@@ -31,6 +31,9 @@ class Screen(object):
 
         self.port = port
         conf.port = port
+
+        self._buff = Buff()
+        self._page = Page(self._buff)
         self._observer = Observer()
         recv_serial.add_observer(self._observer)
 
@@ -62,16 +65,8 @@ class Screen(object):
         while conf.process_running:
             ch = self._window.getch()
 
-            if ch == curses.KEY_SELECT:
-                logger.debug('keyboard mouse select input %s' % ch)
-
-
-            elif ch == curses.KEY_MOUSE:
-                logger.debug('keyboard mouse input %s' % ch)
-
-            elif ch == KEYBOARD.Ctrl_A:  # Menu
+            if ch == KEYBOARD.Ctrl_A:  # Menu
                 self._menu.run()
-                self._window.refresh()
 
             elif ch == KEYBOARD.Up:
                 if not self.block_key(ch):
@@ -87,8 +82,29 @@ class Screen(object):
             elif ch == KEYBOARD.Left:
                 self.port.write_hex('1b5b44')
 
+            elif ch == KEYBOARD.Page_UP:
+                top, bottom = self._page.up()
+                self.refresh(top, bottom)
+
+            elif ch == KEYBOARD.Page_Down:
+                top, bottom = self._page.down()
+                self.refresh(top, bottom)
             else:
                 self.port.write(ch)
+
+    def refresh(self, top, bottom):
+        b = self._buff.buff[top:bottom]
+        self._window.clear()
+        index = 0
+        for l in b:
+            self._window.addstr(index, 1, l)
+            index += 1
+
+        y, x = self._window.getmaxyx()
+        self._statusbar.display_statusbar(y, x)
+        self._window.addstr(y-2, 1, self._buff.cache)
+        self._window.refresh()
+
 
     def block_key(self, key: int, ms=0.1):
         """用于阻塞单个通道, 如果阻塞，返回真"""
@@ -105,7 +121,6 @@ class Screen(object):
             self._block_time[key] = now_time
             return False
 
-
     def display_buffer(self):
         """作为显示主界面的循环"""
         pos = 1
@@ -113,7 +128,6 @@ class Screen(object):
         logger.info("Screen.display_buffer Run")
         while conf.process_running:
             y, x = self._window.getmaxyx()
-
 
             stream = self._observer.get(timeout=1)
 
@@ -128,16 +142,21 @@ class Screen(object):
 
             for e in stream:
                 if e == "\n":
-                    # NOTE 加入capture，要注意这里是对屏幕的记录
+                    self._buff.add()
+
+                    if self._page.count != 1:
+                        self._page.reset()
+                        self.refresh(2-y, -1)
+
                     if features.has_capture():
-                        conf.capture.info(self._window.instr(
-                            y-2, 1).rstrip().decode())
+                        conf.capture.info(self._buff.buff[-1])
                     self._window.scroll()
                     pos = 1
 
                 elif (ord(e) == 8):  # 退格
                     if pos > 0:
                         pos -= 1
+                    self._buff.delete()
                     curses.killchar()
                     self._window.move(y-2, pos)
 
@@ -147,7 +166,9 @@ class Screen(object):
 
                 else:  # 实际内容
                     if pos >= x-1:
+                        self._window.scroll()
                         pos = 1
+                    self._buff.put(e)
                     self._window.addstr(y-2, pos, e)
                     pos += 1
 
@@ -179,6 +200,86 @@ class Screen(object):
                 self.port.write(3)
 
         curses.endwin()
+
+
+class Buff:
+
+    def __init__(self, max_length = 2000):
+        self._buff = []  # 用于存放屏幕缓存
+        self._cache = ""
+        self._max_length = max_length
+
+    def add(self):
+        """将缓存添加到buff中"""
+        if len(self._buff) > self._max_length:
+            self._buff.pop(0)
+
+        self._buff.append(self._cache)
+        self._cache = ""
+
+    def delete(self):
+        self._cache = self._cache[:-1]
+
+    def put(self, s):
+        self._cache += s
+
+    def __len__(self):
+        return len(self._buff)
+
+    @property
+    def buff(self):
+        return self._buff
+
+    @property
+    def cache(self):
+        return self._cache
+
+class Page:
+
+    def __init__(self, buff:Buff):
+        self.count = 1
+        self._buff = buff
+
+    def up(self):
+        size = self.__len__()
+
+        y, x = conf.window.getmaxyx()
+        if self.count < size:
+            bottom = (size - self.count -1) * (y-2)
+            top = bottom - y + 2
+            if top < 0: top = 0
+            self.count += 1
+            return (top, bottom)
+
+        else:
+            return (0, y-2)
+
+    def down(self):
+        size = self.__len__()
+        buff_length = len(self._buff)
+            
+        y, x = conf.window.getmaxyx()
+        if self.count > 1:
+            bottom = (size - self.count +1) * (y-2)
+            if bottom > buff_length:
+                bottom = buff_length
+
+            top = bottom - y + 2
+            self.count -= 1
+            return (top, bottom)
+
+        else:
+            return (buff_length - y + 2, buff_length)
+            
+
+
+    def __len__(self):
+        y, x = conf.window.getmaxyx()
+        return len(self._buff) // (y-2) 
+
+    def reset(self):
+        self.count = 1
+
 
 
 def yxcenter(scr, text=""):
