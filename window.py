@@ -100,7 +100,10 @@ class Screen(object):
         self._window.clear()
         index = 0
         for l in b:
-            self._window.addstr(index, 1, l)
+            try:
+                self._window.addstr(index, 1, l)
+            except:
+                logger.debug('except index %s' % index)
             index += 1
 
         self._statusbar.display_statusbar(conf.y, conf.x)
@@ -145,9 +148,9 @@ class Screen(object):
                 if e == "\n":
                     self._buff.add()
 
-                    if self._page.count != 1:
+                    if not self._page.is_bottom():
                         self._page.reset()
-                        self.refresh(2-conf.y, -1)
+                        self.refresh(1-conf.y, -2)
 
                     if features.has_capture():
                         conf.capture.info(self._buff.buff[-1])
@@ -239,38 +242,42 @@ class Buff:
 class Page:
 
     def __init__(self, buff: Buff):
-        self.count = 1
+        self.count = 0
         self._buff = buff
 
     def up(self):
-        size = self.__len__()
+        total_page = self.__len__()
 
-        if self.count < size:
-            bottom = (size - self.count - 1) * (conf.y-2)
-            top = bottom - conf.y + 2
-            if top < 0:
-                top = 0
+        if self.count < total_page:  # 如果到顶了
             self.count += 1
+            logger.debug('up count %s' % self.count)
+            top = (total_page - self.count) * (conf.y-2)
+            bottom = top + conf.y - 2
+            if top < 0:
+                bottom = 0
+            logger.debug('up %s %s' % (top, bottom))
             return (top, bottom)
 
         else:
             return (0, conf.y-2)
 
     def down(self):
-        size = self.__len__()
-        buff_length = len(self._buff)
+        total_page = self.__len__()
+        buff_size = len(self._buff)
 
-        if self.count > 1:
-            bottom = (size - self.count + 1) * (conf.y-2)
-            if bottom > buff_length:
-                bottom = buff_length
-
-            top = bottom - conf.y + 2
+        if self.count > 0:
             self.count -= 1
+            logger.debug('down count %s' % self.count)
+            top = (total_page - self.count) * (conf.y-2)
+            if top > buff_size - conf.y + 2:
+                top = buff_size - conf.y + 2
+
+            bottom = top + conf.y - 2
+            logger.debug('down %s %s' % (top, bottom))
             return (top, bottom)
 
         else:
-            return (buff_length - conf.y + 2, buff_length)
+            return (buff_size - conf.y + 2, buff_size)
 
     def __len__(self):
         return len(self._buff) // (conf.y-2)
@@ -278,6 +285,8 @@ class Page:
     def reset(self):
         self.count = 1
 
+    def is_bottom(self):
+        return self.count == 1
 
 def yxcenter(scr, text=""):
     '''
