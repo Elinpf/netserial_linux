@@ -100,10 +100,7 @@ class Screen(object):
         self._window.clear()
         index = 0
         for l in b:
-            try:
-                self._window.addstr(index, 1, l)
-            except:
-                logger.debug('except index %s' % index)
+            self._window.addstr(index, 1, l)
             index += 1
 
         self._statusbar.display_statusbar(conf.y, conf.x)
@@ -250,12 +247,10 @@ class Page:
 
         if self.count < total_page:  # 如果到顶了
             self.count += 1
-            logger.debug('up count %s' % self.count)
             top = (total_page - self.count) * (conf.y-2)
             bottom = top + conf.y - 2
             if top < 0:
                 bottom = 0
-            logger.debug('up %s %s' % (top, bottom))
             return (top, bottom)
 
         else:
@@ -267,13 +262,11 @@ class Page:
 
         if self.count > 0:
             self.count -= 1
-            logger.debug('down count %s' % self.count)
             top = (total_page - self.count) * (conf.y-2)
             if top > buff_size - conf.y + 2:
                 top = buff_size - conf.y + 2
 
             bottom = top + conf.y - 2
-            logger.debug('down %s %s' % (top, bottom))
             return (top, bottom)
 
         else:
